@@ -1,4 +1,5 @@
 import {
+  ConnectedSocket,
   MessageBody,
   SubscribeMessage,
   WebSocketGateway,
@@ -13,23 +14,31 @@ export class EventsGateway {
   server: Server;
 
   @SubscribeMessage('message')
-  async handleMessage(client: Socket, data: string) {
-    console.log(data);
-    console.log(Socket);
+  async handleMessage(@MessageBody() data, @ConnectedSocket() client) {
     this.server.emit('message', 'server to client : ' + data);
   }
 
-  afterInit(client) {
+  async getConnectedUserCount(): Promise<number> {
+    const count = await this.server.allSockets();
+    return count.size;
+  }
+
+  initLogging() {
+    setInterval(async () => {
+      console.log('[LOG] User count : ' + (await this.getConnectedUserCount()));
+    }, 10000);
+  }
+
+  afterInit(server) {
     console.log('after Init');
-    console.log(client);
+    this.initLogging();
   }
 
   handleDisconnect(client) {
-    console.log(client);
+    console.log('[LOG] Disconnected : ' + client.id);
   }
 
-  handleConnection(server) {
-    console.log('connected');
-    console.log(server);
+  handleConnection(client) {
+    console.log('[LOG] Connected : ' + client.id);
   }
 }
