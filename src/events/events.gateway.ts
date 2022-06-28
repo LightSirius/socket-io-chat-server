@@ -5,17 +5,31 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { Server } from 'socket.io';
-import { Socket } from 'net';
+import type {
+  OnGatewayInit,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+} from '@nestjs/websockets';
+import type { Server, Socket } from 'socket.io';
+import { UserDataInterface } from '../room/interface/user-data.interface';
 
 @WebSocketGateway(3005, { transports: ['websocket'], namespace: 'chat' })
-export class EventsGateway {
+export class EventsGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
+  private socketMap = new Map();
+
+  @SubscribeMessage('join')
+  async joinRoom(@MessageBody() data, @ConnectedSocket() socket) {
+    socket.join(data.room);
+  }
+
   @SubscribeMessage('message')
   async handleMessage(@MessageBody() data, @ConnectedSocket() client) {
-    this.server.emit('message', 'server to client : ' + data);
+    client.broadcast.emit('message', 'server to client : ' + data);
   }
 
   async getConnectedUserCount(): Promise<number> {
@@ -26,19 +40,26 @@ export class EventsGateway {
   initLogging() {
     setInterval(async () => {
       console.log('[LOG] User count : ' + (await this.getConnectedUserCount()));
+      // console.log(this.socketMap);
     }, 10000);
   }
 
-  afterInit(server) {
+  setUserData(socket: Socket, name: string): void {
+    this.socketMap.set(socket, { id: socket.id, name: name });
+  }
+
+  afterInit(server: Server): void {
     console.log('after Init');
     this.initLogging();
   }
 
-  handleDisconnect(client) {
-    console.log('[LOG] Disconnected : ' + client.id);
+  handleConnection(socket: Socket): void {
+    console.log('[LOG] Connected : ' + socket.id);
+    this.setUserData(socket, 'testName');
   }
 
-  handleConnection(client) {
-    console.log('[LOG] Connected : ' + client.id);
+  handleDisconnect(socket: Socket): void {
+    console.log('[LOG] Disconnected : ' + socket.id);
+    this.socketMap.delete(socket);
   }
 }
